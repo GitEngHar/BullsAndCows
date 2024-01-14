@@ -1,6 +1,6 @@
 # Welocom To BullsAndCows WebApps🎉
 
-ゲームは[こちら](https://gamebullsandcows.com/)から
+ゲームは[こちら](https://bullscowsgame.net/)から
 
 ## 非エンジニア方向け
 
@@ -19,7 +19,8 @@ Bulls and Cowsは、4桁の異なる数字を選んで秘密の数字とし、�
 
 |プレイ画面|回答を見る|クリア画面|
 |-|-|-|
-|a|a|a|
+|![image](https://github.com/GitEngHar/BullsAndCows/assets/119464648/c0bd5195-926b-43b7-a63c-fef3fcc2e987)|![image](https://github.com/GitEngHar/BullsAndCows/assets/119464648/133eabb4-2566-49e5-a25a-fb6693f26ed0)
+|![image](https://github.com/GitEngHar/BullsAndCows/assets/119464648/65273d36-d77c-4e1c-a06f-5c293c6296f7)|
 
 ## エンジニア向け
 
