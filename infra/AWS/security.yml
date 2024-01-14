@@ -1,0 +1,105 @@
+Description:  security for simpleWebapp 
+Parameters:
+    EnvironmentName:
+      Description: all resource name next prefix
+      Type: String
+      Default: BullsAndCoes
+Resources:
+  # セキュリティグループの作成
+  SecurityGroupALB:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: the sg for front alb
+      GroupName: !Sub ${EnvironmentName}-alb-sg
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags: 
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb-sg
+      VpcId: !ImportValue Vpc-ID
+  SecurityGroupECSService:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: the sg for front svc 
+      GroupName: !Sub ${EnvironmentName}-svc-sg
+      SecurityGroupIngress: 
+        - IpProtocol: TCP
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref SecurityGroupALB
+      Tags: 
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-svc-sg
+      VpcId: !ImportValue Vpc-ID
+  # タスク実行ロール
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      RoleName: ECSTaskExecutionRole2
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'  
+  # スケジューラ実行ロール
+  ScheduleRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "scheduler.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      RoleName: EcsSchedulerRole
+      Policies:
+        - PolicyName: "ecs-task-schedule-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+              - Effect: "Allow"
+                Action:
+                  - "ecs:UpdateService"
+                Resource: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/*"
+Outputs:
+  SecurityGroupFrontALB:
+    Value: !Ref SecurityGroupALB
+    Export:
+      Name: SecurityGroupALB-ID
+  SecurityGroupFrontService:
+    Value: !Ref SecurityGroupECSService
+    Export:
+      Name: SecurityGroupECSService-ID  
+  ECSTaskExecutionRoleOutput:
+    Value: !GetAtt 
+             - ECSTaskExecutionRole
+             - Arn
+    Export:
+      Name: ECSTaskExecutionRole-Arn
+  EcsSchedulerRole:
+    Value: !GetAtt 
+             - ScheduleRole
+             - Arn
+    Export:
+      Name: EcsSchedulerRole-Arn

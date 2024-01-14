@@ -1,0 +1,186 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CodeDeploy with ECS Blue/Green deploy
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Parameters for CodeDeploy
+        Parameters:
+          - ClusterName
+          - ServiceName
+          - ALBName
+          - ALBTargetGroupBlueName
+          - ALBTargetGroupGreenName
+Parameters:
+  ClusterName:
+    Type: String
+    Default: BullsAndCowsCluster
+  ServiceName:
+    Type: String
+    Default: BullsAndCowsService
+  ALBName:
+    Type: String
+    Default: BullsAndCowsALB
+  ALBTargetGroupBlueName:
+    Type: String 
+    Default: BullsAndCowsTargetGroupBlue
+  ALBTargetGroupGreenName:
+    Type: String 
+    Default: BullsAndCowsTargetGroupGreen
+Resources:
+  # ALBの作成
+  webAppALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Ref ALBName
+      Subnets:
+        - !ImportValue PublicSubnet1-ID
+        - !ImportValue PublicSubnet2-ID
+      SecurityGroups:
+        - !ImportValue SecurityGroupFrontALB-ID
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+  # TargetGroupの作成
+  ALBTargetGroupBlue:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Ref ALBTargetGroupBlueName
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+      VpcId: !ImportValue Vpc-ID
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: /
+      HealthCheckPort: '80'
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: '200'
+  # リスナーの作成
+  ALBListenerProdTraffic:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref webAppALB
+      Certificates: 
+        -  CertificateArn : "arn:aws:acm:ap-northeast-1:429535751272:certificate/b2703972-a8fa-4001-88ea-7fe761649ce4"
+      Protocol: HTTPS
+      Port: 443
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroupBlue
+                Weight: 1
+  # TargetGroup(2)の作成
+  # ALBTargetGroupGreen:
+  #   Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+  #   Properties:
+  #     Name: !Ref ALBTargetGroupGreenName
+  #     Protocol: HTTP
+  #     Port: 80
+  #     TargetType: ip
+  #     VpcId: !ImportValue Vpc-ID
+  #     HealthCheckIntervalSeconds: 5
+  #     HealthCheckPath: /
+  #     HealthCheckPort: '80'
+  #     HealthCheckProtocol: HTTP
+  #     HealthCheckTimeoutSeconds: 2
+  #     HealthyThresholdCount: 2
+  #     Matcher:
+  #       HttpCode: '200'
+  # Cluster作成
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties: 
+      ClusterName: !Ref ClusterName
+  # Serviceを作成
+  ECSService:
+    Type: 'AWS::ECS::Service'
+    Properties:
+        Cluster: !Ref ECSCluster
+        ServiceName: !Ref ServiceName
+        TaskDefinition:  !Ref BlueTaskDefinition
+        LoadBalancers:
+          - ContainerName: BullsAndCows
+            ContainerPort: 80
+            TargetGroupArn: !Ref ALBTargetGroupBlue
+        LaunchType: "FARGATE"
+        SchedulingStrategy: "REPLICA"
+        # DeploymentController:
+        #   Type: CODE_DEPLOY
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            SecurityGroups: 
+              - !ImportValue SecurityGroupFrontService-ID
+            Subnets: 
+              - !ImportValue PublicSubnet1-ID
+              - !ImportValue PublicSubnet2-ID
+            AssignPublicIp: ENABLED
+        DesiredCount: 1
+  # タスク設定
+  BlueTaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    DependsOn: ALBListenerProdTraffic
+    Properties:
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        - Image: '429535751272.dkr.ecr.ap-northeast-1.amazonaws.com/viewcertweb:66174a9a2e20b94a10880d1aebf5da986682795c'
+          Name: simpleWebapp
+          PortMappings:
+            - HostPort: 80
+              Protocol: tcp
+              ContainerPort: 80
+          Essential: true
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      Family: frontTask
+      ExecutionRoleArn: !ImportValue ECSTaskExecutionRole-Arn 
+  # EcsCodeDeploy:
+  #   Type: AWS::CodeDeploy::Application
+  #   Properties:
+  #     ApplicationName: !Sub AppECS-${ClusterName}-${ServiceName}
+  #     ComputePlatform: ECS
+
+  # EcsDeploymentGroup:
+  #   Type: AWS::CodeDeploy::DeploymentGroup
+  #   DependsOn: ECSDemoService
+  #   Properties:
+  #     ApplicationName: !Ref EcsCodeDeploy
+  #     AutoRollbackConfiguration:
+  #       Enabled: True
+  #       Events:
+  #         - "DEPLOYMENT_FAILURE"
+  #     BlueGreenDeploymentConfiguration:
+  #       DeploymentReadyOption:
+  #         ActionOnTimeout: CONTINUE_DEPLOYMENT
+  #         WaitTimeInMinutes: 0
+  #       TerminateBlueInstancesOnDeploymentSuccess:
+  #         Action: TERMINATE
+  #         TerminationWaitTimeInMinutes: 5
+  #     DeploymentConfigName: "CodeDeployDefault.ECSAllAtOnce"
+  #     DeploymentGroupName: !Sub DgpECS-${ClusterName}-${ServiceName}
+  #     DeploymentStyle:
+  #       DeploymentOption: "WITH_TRAFFIC_CONTROL"
+  #       DeploymentType: "BLUE_GREEN"
+  #     ECSServices:
+  #          - ServiceName: !Ref ServiceName
+  #            ClusterName: !Ref ClusterName
+  #     LoadBalancerInfo:
+  #       TargetGroupPairInfoList:
+  #         - TargetGroups:
+  #             - Name:
+  #                 !Ref ALBTargetGroupBlueName
+  #             - Name:
+  #                 !Ref ALBTargetGroupGreenName
+  #           ProdTrafficRoute:
+  #             ListenerArns:
+  #               - !Ref ALBListenerProdTraffic 
+  #     ServiceRoleArn:
+  #       !ImportValue CodeDeployServiceRole-Arn
+Outputs:
+  appname:
+      Description: appname
+      Value: !Ref EcsCodeDeploy

@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CodeDeploy with ECS Blue/Green deploy
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Parameters for CodeDeploy
+        Parameters:
+          - ClusterName
+          - ServiceName
+          - StartDesiredCount
+Parameters:
+  ClusterName:
+    Type: String
+    Default: BullsAndCows-clf-Cluster
+  ServiceName:
+    Type: String
+    Default: BullsAndCows-clf-Service
+  StartDesiredCount:
+    Type: Number
+    Default: 1
+Resources:
+  EcsStopScheduler:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: BullsAndCows Stop Scheduler
+      Name: BullsAndCowsStopScheduler
+      ScheduleExpression: "cron(59 23 * * ? *)"
+      ScheduleExpressionTimezone: Japan 
+      FlexibleTimeWindow: 
+        Mode: "OFF"
+      State: ENABLED
+      Target: 
+        Arn: "arn:aws:scheduler:::aws-sdk:ecs:updateService"
+        Input: !Sub "{ \"DesiredCount\": 0, \"Service\": \"${ServiceName}\", \"Cluster\": \"${ClusterName}\" }"
+        RoleArn: !ImportValue EcsSchedulerRole-Arn
+  EcsStartScheduler:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: BullsAndCows Start Scheduler
+      Name: BullsAndCowsStartScheduler
+      ScheduleExpression: "cron(0 6 * * ? *)"
+      ScheduleExpressionTimezone: Japan 
+      FlexibleTimeWindow: 
+        Mode: "OFF"
+      State: ENABLED
+      Target: 
+        Arn: "arn:aws:scheduler:::aws-sdk:ecs:updateService"
+        Input: !Sub "{ \"DesiredCount\": ${StartDesiredCount}, \"Service\": \"${ServiceName}\", \"Cluster\": \"${ClusterName}\" }"
+        RoleArn: !ImportValue EcsSchedulerRole-Arn

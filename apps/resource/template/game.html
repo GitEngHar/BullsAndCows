@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BullsAndCows</title>
+<style>
+    html{
+        /* htmlのデフォルトが16pxであり、rem計算がしやすいように10pxに調節 */
+        font-size: 62.5%;
+        background-color: #F2F2F2;
+    }
+    @media (max-width:767px) {
+        .main{
+            width: 100%;
+            text-align:center;
+        }
+        .sub{
+            width: 100%;   
+            text-align:center;
+        }
+        .title{
+            text-align:center;
+            font: 4rem 'メイリオ', 'Meiryo', sans-serif;
+            color:black;
+            text-decoration:underline;
+            text-decoration-color:black;
+        }
+        .rules{
+            display:flex;
+            flex-flow: column;
+            display:inline-block;
+            border: solid 0.2rem #000;
+            padding:1rem 1rem 1rem 1rem;
+            border-radius: 1rem;
+            height:80%;
+            width: 80%;
+            font: 1rem 'メイリオ', 'Meiryo', sans-serif;
+        }  
+   
+        .input-form{
+            font: 1rem 'メイリオ', 'Meiryo', sans-serif;
+            height: 2rem;
+            width: 15rem;
+            border-radius: 0.7rem;
+        }
+        .button-form{
+            font: 1rem 'メイリオ', 'Meiryo', sans-serif;
+            height: 2.7rem;
+            width: 3.5rem;
+            border-radius: 0.7rem;
+            border-width: 0;
+            cursor : pointer;
+            color: white;
+            background: #92D050;
+        }   
+        th,td{
+            border: solid 1px;
+            padding: 0.5rem 1rem 0.5rem 1rem;
+            font: 1rem 'メイリオ', 'Meiryo', sans-serif;
+            color:black;
+            background-color: white;
+        }  
+        .restart{
+            text-align: right;
+            color:black;
+            font: 1rem 'メイリオ', 'Meiryo', sans-serif;
+        }    
+     
+    }
+
+    .rule-img-instance{
+            height:100%;
+            width: 100%;  
+    } 
+    table{
+        border-collapse: collapse ;
+        margin: 3rem auto;
+    }
+      
+    @media (min-width:768px) {
+        .main{
+        margin: 1rem 30% 1rem 30%;
+        text-align:center;
+        }
+        .sub{
+            margin: 1rem 30% 1rem 30%;    
+        }
+        .title{
+            text-align:center;
+            font: 7rem 'メイリオ', 'Meiryo', sans-serif;
+            color:black;
+            text-decoration:underline;
+            text-decoration-color:black;
+        }
+        .rules{
+            display:flex;
+            flex-flow: column;
+            display:inline-block;
+            border: solid 0.2rem #000;
+            padding:1rem 1rem 1rem 1rem;
+            border-radius: 1rem;
+            height:70%;
+            width: 70%;  
+            font: 1.5rem 'メイリオ', 'Meiryo', sans-serif;
+        }   
+        .input-form{
+            font: 1.5rem 'メイリオ', 'Meiryo', sans-serif;
+            height: 3rem;
+            width: 25rem;
+            border-radius: 1rem;
+         }
+        .button-form{
+            font: 1.5rem 'メイリオ', 'Meiryo', sans-serif;
+            height: 3.5rem;
+            width: 5rem;
+            border-radius: 1rem;
+            border-width: 0;
+            cursor : pointer;
+            color: white;
+            background: #92D050;
+        }  
+        th,td{
+            border: solid 1px;
+            padding: 1rem 2.5rem 1rem 2.5rem;
+            font: 1.5rem 'メイリオ', 'Meiryo', sans-serif;
+            color:black;
+            background-color: white;
+        }  
+        .restart{
+            text-align: right;
+            color:black;
+            font: 1.5rem 'メイリオ', 'Meiryo', sans-serif;
+        }
+    }
+
+</style>
+</head>
+<body>
+    <div class="main">
+        <h1 class="title">Bulls And Cows</h1>
+        <div class="rules">
+                <img src="rule.png" class="rule-img-instance">
+                <p class="rule-text">４ケタの数をあててゲームクリア！<br>
+                ４桁の数はそれぞれバラバラになっている。〇 1234 , × 2234<br>
+                ターゲットの数と位置が一致していれば Bulls <br>
+                位置は違うが含まれていれば Cows<br>
+                ターゲット : 1234 , 例の回答 : 4135 ☞ Bulls1 , Cows 2<br>
+                </p>
+        </div>
+        <table class="history">
+            <tr>
+                <th>ターン</th>
+                <th>あなたの回答</th>
+                <th>Bulls</th>
+                <th>Cows</th>
+                <th>Judge</th>
+                <tr th:each="h:${histories}">
+                    <td th:text="${h.seq}"></td>
+                    <td th:text="${h.yourAnswer}"></td>
+                    <td th:text="${h.bulls}"></td>
+                    <td th:text="${h.cows}"></td>
+                    <td th:text="${h.result}"></td>
+                </tr>
+            </tr>
+        </table>
+        <div class="forms">
+            <input type="text" name="number" class="input-form" id="input-form" placeholder="1234" autofocus autocomplete="off">
+            <input type="submit" class="button-form" value="GO" onclick="inputCheck()";>
+        </div>
+    </div>
+    <div class="sub">
+        <p class="restart">
+            <a href="/">はじめから</a>
+            <a href="/answer">回答を見る(ギブアップ)</a>
+        </p>
+    </div>
+</body>
+<script language="javascript" type="text/javascript">
+    function inputCheck(){
+        var send_form_element = document.createElement('form');
+        var request = document.createElement('input');
+        send_form_element.method="POST";
+        send_form_element.action="/challenge";
+        request.type="hidden";
+        request.name="number";
+        
+        var input_form = document.getElementById("input-form");
+        var input_form_value = input_form.value;
+        if(input_form_value.match(/[0-9]{4}/g) != input_form_value ) { 
+            alert('4桁の数値を入力してください。');
+            input_form.value = '';
+        } else { //post処理の記述
+            input_form.value = '';
+            request.value=input_form_value;
+            send_form_element.appendChild(request);
+            document.body.appendChild(send_form_element);
+            send_form_element.submit();
+        }
+    }
+</script>
+</html>

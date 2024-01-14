@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CodeDeploy with ECS /Green deploy
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Parameters for CodeDeploy
+        Parameters:
+          - ClusterName
+          - ServiceName
+          - ALBName
+          - ALBTargetGroupName
+          - HostedZoneName
+Parameters:
+  ClusterName:
+    Type: String
+    Default: BullsAndCows-clf-Cluster
+  ServiceName:
+    Type: String
+    Default: BullsAndCows-clf-Service
+  ALBName:
+    Type: String
+    Default: BullsAndCows-clf-ALB
+  ALBTargetGroupName:
+    Type: String 
+    Default: BullsAndCows-clf-TargetGroup
+  HostedZoneName:
+    Type: String
+    Default: bullscowsgame.net
+Resources:
+  # ALBの作成
+  webAppALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Ref ALBName
+      Subnets:
+        - !ImportValue PublicSubnet1-ID
+        - !ImportValue PublicSubnet2-ID
+      SecurityGroups:
+        - !ImportValue SecurityGroupALB-ID
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+  # リスナーの作成
+  ALBListenerProdTraffic: #証明書作成に依存
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref webAppALB
+      Protocol: HTTP
+      Port: 8080
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroup
+                Weight: 1
+  # TargetGroupの作成
+  ALBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Ref ALBTargetGroupName
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+      VpcId: !ImportValue Vpc-ID
+      HealthCheckPath: /
+      HealthCheckPort: '8080'
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: '200'
+  # Cluster作成
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties: 
+      ClusterName: !Ref ClusterName
+  # Serviceを作成
+  ECSService:
+    Type: 'AWS::ECS::Service'
+    Properties:
+        Cluster: !Ref ECSCluster
+        ServiceName: !Ref ServiceName
+        TaskDefinition:  !Ref AppTaskDefinition
+        LoadBalancers:
+          - ContainerName: BullsAndCows
+            ContainerPort: 8080
+            TargetGroupArn: !Ref ALBTargetGroup
+        LaunchType: "FARGATE"
+        SchedulingStrategy: "REPLICA"
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            SecurityGroups: 
+              - !ImportValue SecurityGroupECSService-ID
+            Subnets: 
+              - !ImportValue PublicSubnet1-ID
+              - !ImportValue PublicSubnet2-ID
+            AssignPublicIp: ENABLED
+        DesiredCount: 1
+  # タスク設定
+  AppTaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    DependsOn: ALBListenerProdTraffic
+    Properties:
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        - Image: !Sub '${AWS::AccountId}.dkr.ecr.ap-northeast-1.amazonaws.com/bullsandcows'
+          Name: BullsAndCows
+          PortMappings:
+            - HostPort: 8080
+              Protocol: tcp
+              ContainerPort: 8080
+          Essential: true
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '1024'
+      Memory: '2048'
+      Family: BullsAndCows-ECS
+      ExecutionRoleArn: !ImportValue ECSTaskExecutionRole-Arn 
+  # Route53
+  Route53HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Sub "${HostedZoneName}"
+  #レコードの作成
+  Route53RSGroup:
+    DependsOn: webAppALB #ALB作成に依存
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref Route53HostedZone
+      RecordSets:
+      # ALBを宛先としたエイリアス設定
+        - Name: !Sub "${HostedZoneName}"
+          AliasTarget:
+            HostedZoneId: !Sub "${webAppALB.CanonicalHostedZoneID}"
+            DNSName: !Sub "${webAppALB.DNSName}"
+          Type: A
+Outputs:
+  clustername:
+      Description: clustername
+      Value: !Ref ECSCluster
+  servicename:
+      Description: servicename
+      Value: !Ref ECSService      
+  webappalbarn:
+      Description: servicename
+      Value: !Ref webAppALB   
+  Route53HostedZoneId:
+      Description: Rute53HostedZone.Id  
+      Value: !GetAtt 
+             - Route53HostedZone
+             - Id
+  ALBTargetGrouparn:
+      Description: ALBTargetGroup 
+      Value: !Ref ALBTargetGroup   
