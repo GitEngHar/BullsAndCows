@@ -40,6 +40,7 @@ Bulls and Cowsは、4桁の異なる数字を選んで秘密の数字とし、�
 大規模なアクセスは想定していないかつ、システムの稼働の安定性を重要視することもないのでシングル構成になっています  
 
 #### 全体構成図
+![BullsAndCows](https://github.com/GitEngHar/BullsAndCows/assets/119464648/81eb9179-e3f3-45d0-928d-855d36d88a8b)
 
 
 ### 今後実装したい機能
